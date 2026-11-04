@@ -18,6 +18,7 @@ class AtuladoApp extends Application.AudioContentProviderApp {
     var pairingCode = "";
     var notice = "";
     var loading = false;
+    var mainMenu = null;
     function initialize() { AudioContentProviderApp.initialize(); queue = new DistanceQueue(); }
     function onStart(state) {
         deviceToken = Application.Storage.getValue("deviceTokenV1");
@@ -34,7 +35,7 @@ class AtuladoApp extends Application.AudioContentProviderApp {
             }
         }
         queue.restore(Application.Storage.getValue("progress:" + raceId));
-        log("inicio v4;archivos=" + refs.size());
+        log("inicio v5;archivos=" + refs.size());
     }
     function applyPackage(pack) {
         if (!(pack instanceof Dictionary) || !pack.hasKey("files") || !pack.hasKey("refs") || !pack.hasKey("raceId")) { return false; }
@@ -50,12 +51,13 @@ class AtuladoApp extends Application.AudioContentProviderApp {
     }
     function saveProgress() { Application.Storage.setValue("progress:" + raceId, queue.snapshot()); }
     function onStop(state) { saveProgress(); }
-    function getPlaybackConfigurationView() { return [new ProbeView(), new ProbeInput()]; }
+    function getPlaybackConfigurationView() { mainMenu = new RaceMenu(); return [mainMenu, new ProbeOptions()]; }
+    function refresh() { if (mainMenu != null) { mainMenu.refresh(); } WatchUi.requestUpdate(); }
     function getSyncDelegate() { return new RaceSync(); }
     function ready() {
         if (refs.size() < 2 || refs.size() != files.size()) { return false; }
         for (var i = 0; i < refs.size(); i += 1) {
-            if (Media.getCachedContentObj(new Media.ContentRef(refs[i], Media.CONTENT_TYPE_AUDIO)) == null) { return false; }
+            if (cached(refs[i]) == null) { return false; }
         }
         return true;
     }
@@ -66,18 +68,15 @@ class AtuladoApp extends Application.AudioContentProviderApp {
     }
     function content(index) {
         if (index < 0 || index >= refs.size()) { return null; }
-        return Media.getCachedContentObj(new Media.ContentRef(refs[index], Media.CONTENT_TYPE_AUDIO));
+        return cached(refs[index]);
     }
-    function start() {
-        if (loading) { return; }
-        if (pairingCode != "" && deviceToken != null) { Communications.startSync2(null); }
-        else if (ready()) { Media.startPlayback({}); }
-        else if (deviceToken != null) { Communications.startSync2(null); }
-        else { beginPair(); }
+    function cached(id) {
+        try { return Media.getCachedContentObj(new Media.ContentRef(id, Media.CONTENT_TYPE_AUDIO)); }
+        catch (error) { return null; }
     }
     function beginPair() {
         if (loading) { return; }
-        loading = true; notice = "Conectando con la web"; WatchUi.requestUpdate();
+        loading = true; notice = "Conectando con la web"; refresh();
         Communications.makeWebRequest(SERVICE + "/api/device/pair", {}, {
             :method => Communications.HTTP_REQUEST_METHOD_POST,
             :headers => {"Content-Type" => "application/json"},
@@ -92,35 +91,71 @@ class AtuladoApp extends Application.AudioContentProviderApp {
             Application.Storage.setValue("pairCodeV1", pairingCode);
             notice = "Introduce el codigo en la web";
         } else { notice = "Error de conexion: " + code; }
-        WatchUi.requestUpdate();
+        refresh();
     }
-    function newSession() { queue = new DistanceQueue(); if (files.size() > 1 && raceId != "probe") { var ids = []; var meters = []; for (var i = 1; i < files.size(); i += 1) { ids.add(files[i]["id"]); meters.add(files[i]["meters"]); } queue.configure(ids, meters); } saveProgress(); notice = "Progreso reiniciado"; }
+    function newSession() { queue = new DistanceQueue(); if (files.size() > 1 && !"probe".equals(raceId)) { var ids = []; var meters = []; for (var i = 1; i < files.size(); i += 1) { ids.add(files[i]["id"]); meters.add(files[i]["meters"]); } queue.configure(ids, meters); } saveProgress(); notice = "Progreso reiniciado"; }
     function log(message) { System.println("ATULADO;" + System.getTimer() + ";" + message); }
 }
 class RaceSync extends Communications.SyncDelegate {
-    var index = 0; var ids = []; var cancelled = false; var pack = null;
+    var index = 0; var ids = []; var cancelled = false; var pack = null; var journal = null; var previousRefs = [];
     function initialize() { SyncDelegate.initialize(); }
     function isSyncNeeded() { return true; }
+    function packageStatus(data) {
+        if (!(data instanceof Dictionary) || !data.hasKey("status")) { return :invalid; }
+        if ("ready".equals(data["status"])) { return :ready; }
+        return "pending".equals(data["status"]) ? :pending : :empty;
+    }
+    function encoding(file) { return "mp3".equals(file["encoding"]) ? Media.ENCODING_MP3 : Media.ENCODING_WAV; }
     function onStartSync() as Void {
         index = 0; ids = []; cancelled = false;
         var app = Application.getApp();
-        if (app.deviceToken == null) { Communications.notifySyncComplete("Vincula primero el reloj en la web"); return; }
+        app.loading = true; app.notice = "Buscando mensajes"; app.refresh();
+        if (app.deviceToken == null) { complete("Vincula primero el reloj en la web"); return; }
         Communications.makeWebRequest(SERVICE + "/api/device/package", null, {
             :headers => {"Authorization" => "Bearer " + app.deviceToken},
             :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
         }, method(:manifest));
     }
-    function onStopSync() as Void { cancelled = true; Communications.cancelAllRequests(); Communications.notifySyncComplete("Descarga cancelada"); }
+    function complete(error) {
+        var app = Application.getApp(); app.loading = false;
+        app.notice = error == null ? "Carrera lista sin conexion" : error;
+        app.refresh(); Communications.notifySyncComplete(error);
+    }
+    function onStopSync() as Void { cancelled = true; Communications.cancelAllRequests(); complete("Cancelado. Puedes reintentar"); }
     function manifest(code as Number, data as Null or Lang.ByteArray or Dictionary or String or Toybox.PersistedContent.Iterator) as Void {
         if (cancelled) { return; }
-        if (code != 200 || !(data instanceof Dictionary) || !data.hasKey("status")) { Communications.notifySyncComplete("Error obteniendo carrera: " + code); return; }
-        if (data["status"] != "ready") { Communications.notifySyncComplete(data["status"] == "pending" ? "Introduce el codigo del reloj en la web" : "La carrera no tiene mensajes preparados"); return; }
-        pack = data; downloadNext();
+        var status = packageStatus(data);
+        if (code != 200 || !(data instanceof Dictionary) || status == :invalid) { complete(code == 401 ? "Vuelve a vincular el reloj" : "Error obteniendo carrera: " + code); return; }
+        if (status != :ready) { complete(status == :pending ? "Introduce el codigo del reloj en la web" : "La carrera no tiene mensajes preparados"); return; }
+        if (!data.hasKey("files") || !(data["files"] instanceof Array) || data["files"].size() < 2 || data["files"].size() > 31 || !data.hasKey("raceId") || !data.hasKey("name") || !data.hasKey("version")) { complete("Paquete de carrera no valido"); return; }
+        pack = data;
+        previousRefs = [];
+        var app = Application.getApp();
+        for (var i = 0; i < app.refs.size(); i += 1) { previousRefs.add(app.refs[i]); }
+        var saved = Application.Storage.getValue("downloadJournalV1");
+        if (saved instanceof Dictionary && saved.hasKey("entries") && saved["entries"] instanceof Dictionary) {
+            var values = saved["entries"].values();
+            for (var i = 0; i < values.size(); i += 1) {
+                var entry = values[i];
+                if (entry instanceof Dictionary && entry.hasKey("ref") && entry["ref"] != null) { previousRefs.add(entry["ref"]); }
+            }
+        }
+        journal = new DownloadJournal(pack["raceId"], saved);
+        downloadNext();
     }
     function downloadNext() {
         if (cancelled) { return; }
         var app = Application.getApp();
         var entries = pack["files"];
+        // Reutilizar en bucle evita llamadas recursivas para cada audio ya guardado.
+        while (index < entries.size()) {
+            var savedRef = journal.lookup(entries[index]);
+            if (savedRef == null || app.cached(savedRef) == null) { break; }
+            setMetadata(app.cached(savedRef), entries[index]);
+            ids.add(savedRef); index += 1;
+        }
+        app.notice = "Audios: " + index + "/" + entries.size(); app.refresh();
+        Communications.notifySyncProgress((index * 100) / entries.size());
         if (index == entries.size()) {
             // Guardar solo la informacion necesaria durante la carrera.
             // Las URL y los hashes del servidor no necesitan ocupar memoria offline.
@@ -128,33 +163,50 @@ class RaceSync extends Communications.SyncDelegate {
             for (var i = 0; i < entries.size(); i += 1) { compactFiles.add({"id" => entries[i]["id"], "meters" => entries[i]["meters"]}); }
             var compact = {"refs" => ids, "files" => compactFiles, "raceId" => pack["raceId"], "name" => pack["name"], "version" => pack["version"]};
             // Solo se cambia el paquete activo cuando todas las descargas han terminado.
-            if (!app.applyPackage(compact)) { Communications.notifySyncComplete("Paquete de carrera no valido"); return; }
+            if (!app.applyPackage(compact)) { complete("Paquete de carrera no valido"); return; }
             Application.Storage.setValue("racePackageV1", compact);
+            // Compactar el registro y retirar audios antiguos solo tras confirmar el paquete nuevo.
+            var cleanJournal = new DownloadJournal(pack["raceId"], null);
+            for (var i = 0; i < entries.size(); i += 1) { cleanJournal.remember(entries[i], ids[i]); }
+            Application.Storage.setValue("downloadJournalV1", cleanJournal.snapshot());
+            for (var i = 0; i < previousRefs.size(); i += 1) {
+                var keep = false;
+                for (var j = 0; j < ids.size(); j += 1) { if (previousRefs[i].equals(ids[j])) { keep = true; break; } }
+                if (!keep) {
+                    try { Media.deleteCachedItem(new Media.ContentRef(previousRefs[i], Media.CONTENT_TYPE_AUDIO)); }
+                    catch (error) { app.log("no se pudo retirar audio antiguo"); }
+                }
+            }
             app.pairingCode = ""; Application.Storage.setValue("pairCodeV1", "");
-            Communications.notifySyncComplete(null); return;
+            complete(null); return;
         }
         var file = entries[index];
         // No enviar credenciales a hosts distintos del servicio vinculado.
-        if (!(file["url"] instanceof String) || file["url"].find(SERVICE + "/") != 0) { Communications.notifySyncComplete("Origen de audio no autorizado"); return; }
+        if (!(file["url"] instanceof String) || file["url"].find(SERVICE + "/") != 0) { complete("Origen de audio no autorizado"); return; }
         Communications.makeWebRequest(file["url"], null, {
             :headers => {"Authorization" => "Bearer " + app.deviceToken},
             :method => Communications.HTTP_REQUEST_METHOD_GET,
             :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_AUDIO,
-            :mediaEncoding => file["encoding"] == "mp3" ? Media.ENCODING_MP3 : Media.ENCODING_WAV
+            :mediaEncoding => encoding(file)
         }, method(:downloaded));
     }
     function downloaded(code as Number, data as Null or Lang.ByteArray or Dictionary or String or Toybox.PersistedContent.Iterator) as Void { handleAudioResponse(code, data); }
     // El contrato de tipos del SDK omite ContentRef en la respuesta AUDIO.
     function handleAudioResponse(code, data) {
         if (cancelled) { return; }
-        if (code != 200 || !(data instanceof Media.ContentRef)) { Communications.notifySyncComplete("Error descargando audio: " + code); return; }
-        ids.add(data.getId());
-        var cached = Media.getCachedContentObj(data); var metadata = new Media.ContentMetadata();
-        if (cached == null) { Communications.notifySyncComplete("No se ha guardado el audio descargado"); return; }
+        if (code != 200 || !(data instanceof Media.ContentRef)) { complete("Error descargando audio: " + code + ". Reintenta sincronizar"); return; }
+        var cached = Application.getApp().cached(data.getId());
+        if (cached == null) { complete("No se ha guardado el audio descargado"); return; }
         var file = pack["files"][index];
+        setMetadata(cached, file);
+        journal.remember(file, data.getId());
+        Application.Storage.setValue("downloadJournalV1", journal.snapshot());
+        ids.add(data.getId()); index += 1; downloadNext();
+    }
+    function setMetadata(cached, file) {
+        var metadata = new Media.ContentMetadata();
         metadata.title = index == 0 ? "Esperando tus mensajes" : file["title"];
         metadata.artist = "A tu lado"; cached.setMetadata(metadata);
-        index += 1; Communications.notifySyncProgress((index * 100) / pack["files"].size()); downloadNext();
     }
 }
 class ProbeContent extends Media.ContentDelegate {
@@ -193,34 +245,76 @@ class ProbeIterator extends Media.ContentIterator {
     function repeatMode() { return Media.REPEAT_MODE_OFF; }
     function getPlaybackProfile() { var profile = new Media.PlaybackProfile(); profile.playbackControls = [Media.PLAYBACK_CONTROL_PLAYBACK]; return profile; }
 }
-class ProbeView extends WatchUi.View {
+// Menu nativo: acciones visibles con UP/DOWN y START.
+class RaceMenu extends WatchUi.Menu2 {
+    var syncItem; var playItem; var pairItem; var progressItem;
+    function initialize() {
+        Menu2.initialize({:title => "A tu lado / V5"});
+        syncItem = new WatchUi.MenuItem("Sincronizar carrera", null, :sync, {});
+        playItem = new WatchUi.MenuItem("Continuar carrera", null, :play, {});
+        pairItem = new WatchUi.MenuItem("Vincular con la web", null, :pair, {});
+        progressItem = new WatchUi.MenuItem("Ver progreso", null, :progress, {});
+        addItem(syncItem); addItem(playItem); addItem(pairItem);
+        addItem(new WatchUi.MenuItem("Probar auriculares", "Escuchar el primer mensaje", :preview, {}));
+        addItem(progressItem);
+        addItem(new WatchUi.MenuItem("Reiniciar progreso", "Nueva salida, con confirmacion", :reset, {}));
+        refresh();
+    }
+    function onShow() { refresh(); }
+    function refresh() {
+        var app = Application.getApp();
+        syncItem.setSubLabel(app.loading ? "Descarga en curso" : "Descargar nuevos mensajes");
+        playItem.setSubLabel(app.refs.size() > 1 ? app.raceName : "Primero vincula y sincroniza");
+        pairItem.setSubLabel(app.pairingCode.length() > 0 ? "Codigo: " + app.pairingCode : "Obtener codigo para la web");
+        progressItem.setSubLabel(app.refs.size() > 1 ? "Pendientes: " + app.queue.pending() : "Sin carrera descargada");
+    }
+}
+class RaceStatusView extends WatchUi.View {
     function initialize() { View.initialize(); }
     function onUpdate(dc) {
         var app = Application.getApp(); var cx = dc.getWidth() / 2;
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK); dc.clear();
-        dc.drawText(cx, 55, Graphics.FONT_SMALL, "A TU LADO / V4", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(cx, 100, Graphics.FONT_XTINY, app.raceName.substring(0, app.raceName.length() > 28 ? 28 : app.raceName.length()), Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(cx, 145, Graphics.FONT_MEDIUM, app.pairingCode != "" ? app.pairingCode : "Pendientes: " + app.queue.pending(), Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(cx, 195, Graphics.FONT_XTINY, app.pairingCode != "" ? "Codigo para la web (10 min)" : (app.ready() ? "START: continuar carrera" : "START: vincular / descargar"), Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(cx, 235, Graphics.FONT_XTINY, "DOWN: voz / MENU: opciones", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(cx, 280, Graphics.FONT_XTINY, app.queue.blocked() > 0 ? "Sin reproducir: " + app.queue.blocked() + " (3 interrupciones)" : app.notice, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, 50, Graphics.FONT_SMALL, "A TU LADO / V5", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, 95, Graphics.FONT_XTINY, app.raceName.substring(0, app.raceName.length() > 28 ? 28 : app.raceName.length()), Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, 135, Graphics.FONT_MEDIUM, app.pairingCode.length() > 0 ? app.pairingCode : (app.refs.size() > 1 ? "Pendientes: " + app.queue.pending() : "Sin audios"), Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, 185, Graphics.FONT_XTINY, app.pairingCode.length() > 0 ? "Codigo para la web (10 min)" : "Interrumpidos: " + app.queue.blocked(), Graphics.TEXT_JUSTIFY_CENTER);
+        var text = app.notice; var cut = text.length() > 28 ? 28 : text.length();
+        dc.drawText(cx, 225, Graphics.FONT_XTINY, text.substring(0, cut), Graphics.TEXT_JUSTIFY_CENTER);
+        if (text.length() > cut) { dc.drawText(cx, 252, Graphics.FONT_XTINY, text.substring(cut, text.length() > 56 ? 56 : text.length()), Graphics.TEXT_JUSTIFY_CENTER); }
+        dc.drawText(cx, 290, Graphics.FONT_XTINY, "START: sincronizar / BACK: menu", Graphics.TEXT_JUSTIFY_CENTER);
     }
 }
-class ProbeInput extends WatchUi.BehaviorDelegate {
+class RaceStatusInput extends WatchUi.BehaviorDelegate {
     function initialize() { BehaviorDelegate.initialize(); }
-    function onSelect() { Application.getApp().start(); return true; }
-    function onMenu() { var menu = new WatchUi.Menu2({:title => "A tu lado"}); menu.addItem(new WatchUi.MenuItem("Sincronizar carrera", null, :sync, {})); menu.addItem(new WatchUi.MenuItem("Vincular con la web", "Obtener nuevo codigo", :pair, {})); menu.addItem(new WatchUi.MenuItem("Reiniciar progreso", "Nueva salida", :reset, {})); WatchUi.pushView(menu, new ProbeOptions(), WatchUi.SLIDE_UP); return true; }
-    function onNextPage() { if (Application.getApp().ready()) { Media.startPlayback({"voice" => true}); } return true; }
+    function onSelect() { if (!Application.getApp().loading) { Communications.startSync2(null); } return true; }
 }
 class ProbeOptions extends WatchUi.Menu2InputDelegate {
     function initialize() { Menu2InputDelegate.initialize(); }
+    function showStatus() { WatchUi.pushView(new RaceStatusView(), new RaceStatusInput(), WatchUi.SLIDE_UP); }
     function onSelect(item) as Void {
-        if (item.getId() == :sync) { Communications.startSync2(null); return; }
-        if (item.getId() == :pair) { WatchUi.popView(WatchUi.SLIDE_DOWN); Application.getApp().beginPair(); return; }
-        var confirm = new WatchUi.Menu2({:title => "Reiniciar progreso?"}); confirm.addItem(new WatchUi.MenuItem("Cancelar", null, :cancel, {})); confirm.addItem(new WatchUi.MenuItem("Si, nueva salida", null, :confirm, {})); WatchUi.pushView(confirm, new ProbeReset(), WatchUi.SLIDE_UP);
+        var app = Application.getApp(); var id = item.getId();
+        if (id == :progress) { showStatus(); return; }
+        if (app.loading) { showStatus(); return; }
+        if (id == :sync) {
+            if (app.deviceToken == null) { showStatus(); app.beginPair(); }
+            else { Communications.startSync2(null); }
+            return;
+        }
+        if (id == :pair) { showStatus(); app.beginPair(); return; }
+        if (id == :play || id == :preview) {
+            if (!app.ready()) { app.notice = "Primero sincroniza los audios"; showStatus(); return; }
+            Media.startPlayback(id == :preview ? {"voice" => true} : {}); return;
+        }
+        var confirm = new WatchUi.Menu2({:title => "Reiniciar progreso?"});
+        confirm.addItem(new WatchUi.MenuItem("Cancelar", null, :cancel, {}));
+        confirm.addItem(new WatchUi.MenuItem("Si, nueva salida", null, :confirm, {}));
+        WatchUi.pushView(confirm, new ProbeReset(), WatchUi.SLIDE_UP);
     }
 }
 class ProbeReset extends WatchUi.Menu2InputDelegate {
     function initialize() { Menu2InputDelegate.initialize(); }
-    function onSelect(item) as Void { if (item.getId() == :confirm) { Application.getApp().newSession(); } WatchUi.popView(WatchUi.SLIDE_DOWN); WatchUi.popView(WatchUi.SLIDE_DOWN); }
+    function onSelect(item) as Void {
+        if (item.getId() == :confirm) { Application.getApp().newSession(); }
+        WatchUi.popView(WatchUi.SLIDE_DOWN); Application.getApp().refresh();
+    }
 }

@@ -1,4 +1,4 @@
-# A tu lado · Primera versión funcional (v4)
+# A tu lado · Sincronización recuperable y menús del reloj (v5)
 
 Web de carreras e invitaciones con grabación de voz, almacenamiento privado y proveedor Connect IQ para Forerunner 970. La prueba anterior de reproducción a 200 y 400 m funcionó en el reloj del usuario. Esta versión añade carreras reales y debe validarse de nuevo en hardware, especialmente la descarga de WAV.
 
@@ -6,12 +6,12 @@ Web de carreras e invitaciones con grabación de voz, almacenamiento privado y p
 
 1. Entrar en [A tu lado](https://a-tu-lado.eduardocvk.chatgpt.site) con ChatGPT y crear una carrera. Los familiares no necesitan cuenta.
 2. Crear una invitación y compartirla. El destinatario elige un kilómetro y graba o sube hasta 60 segundos de audio. Escucha la grabación y confirma el envío.
-3. Descargar el ZIP v4 desde la web o desde `bin/atulado-fr970-v4.zip`. Copiar sus dos `.prg` a la carpeta existente `GARMIN/Apps` del reloj, sustituyendo los de prueba. Se conservan los identificadores de las aplicaciones.
-4. Abrir **A tu lado - prueba** en el Garmin. En una instalación nueva, START solicita un código. Si conserva los audios antiguos, usar MENU → **Vincular con la web**.
+3. Descargar el ZIP v5 desde la web o desde `bin/atulado-fr970-v5.zip`. Copiar sus dos `.prg` a la carpeta existente `GARMIN/Apps` del reloj, sustituyendo los de prueba. Se conservan los identificadores de las aplicaciones.
+4. Abrir **A tu lado - prueba** desde los proveedores de música del Garmin. La pantalla inicial es un menú nativo: UP/DOWN desplazan y START selecciona. Elegir **Vincular con la web** para obtener un código nuevo. No hace falta mantener pulsado MENU.
 5. En el detalle de carrera de la web, abrir **Vincular esta carrera al Garmin** e introducir las ocho cifras. El código caduca a los diez minutos.
-6. Volver al reloj y pulsar START o MENU → **Sincronizar carrera**, con conexión disponible. Solo cambia el paquete activo cuando terminan todas las descargas. Si falla, conserva el anterior.
-7. Conectar auriculares al reloj. DOWN permite probar una voz sin modificar el progreso. START continúa la carrera. Iniciar la actividad nativa de Carrera/Trail y dejar el proveedor reproduciendo.
-8. MENU → **Reiniciar progreso** permite iniciar una nueva salida con los mismos audios, tras una confirmación. Continuar no borra los mensajes completados.
+6. Volver al menú del reloj y elegir **Sincronizar carrera**, la primera opción, con conexión disponible. Solo cambia el paquete activo cuando terminan todas las descargas. Si falla o se cancela, conserva el anterior; repetir esta opción retoma los archivos completados, comprobando que sigan en caché y coincidan su carrera y huella de contenido. El archivo que se interrumpió se descarga entero.
+7. Conectar auriculares al reloj. **Probar auriculares** permite escuchar la primera voz sin modificar el progreso. **Continuar carrera** inicia la reproducción de la cola. Iniciar la actividad nativa de Carrera/Trail y dejar el proveedor reproduciendo. **Ver progreso** muestra los pendientes, interrupciones y el último estado de sincronización. BACK vuelve al menú.
+8. **Reiniciar progreso** permite iniciar una nueva salida con los mismos audios, tras una confirmación. Continuar no borra los mensajes completados.
 
 El modo sorpresa oculta las voces y kilómetros en la web y en los títulos descargados. Hay que sincronizar otra vez si se cambia el modo o llegan mensajes nuevos.
 
@@ -24,6 +24,8 @@ El modo sorpresa oculta las voces y kilómetros en la web y en los títulos desc
 - Vinculación temporal por código, autorizada por el propietario de la carrera.
 - Cola por distancia, kilómetros coincidentes, progreso persistente por carrera e identificador de mensaje. Añadir mensajes y sincronizar no repite los ya completados.
 - Finalización únicamente por `SONG_EVENT_COMPLETE` del archivo esperado. Interrupciones STOP/SKIP liberan la cola y permiten hasta tres intentos; los pendientes bloqueados se muestran en el reloj.
+- Descarga con porcentaje nativo, estados de error visibles, registro persistente de archivos completados y reutilización por huella; los audios sustituidos se retiran de la caché tras confirmar el paquete nuevo. La primera actualización desde v4 vuelve a descargar el paquete una vez.
+- Comparación por contenido de los textos recibidos por JSON, incluidos estado de carrera y formato del silencio MP3.
 - Borrado de mensajes y carreras; borrar una carrera revoca también sus relojes.
 - El mockup original se conserva sin modificar en `/concepto.html`, con su iframe aislado y su CSP.
 
@@ -39,7 +41,7 @@ Pendientes de validación: micrófono en móviles reales, vinculación y WAV en 
 
 ## Desarrollo y pruebas
 
-- `garmin/provider`: proveedor v4 con web, caché nativa y recuperación de progreso.
+- `garmin/provider`: proveedor v5 con web, caché nativa y recuperación de progreso.
 - `garmin/field`: campo de distancia independiente.
 - `garmin/shared`: cola y regresiones Monkey C.
 - `web`: Vinext/React sobre Cloudflare Workers, D1 y R2; ver su README.
@@ -55,7 +57,7 @@ SDK oficial Garmin 9.3.0 y perfil `fr970`. SDK Manager se instaló como administ
 
 Para obtener logs, crear `atulado-provider-fr970.txt` vacío en `GARMIN/Apps/Logs`. No se registran claves ni grabaciones. Las líneas `ATULADO` permiten localizar selección, finalización e interrupciones. Los binarios de test están separados en `bin/tests/`.
 
-Verificación de desarrollo: seis regresiones Monkey C en simulador, cuatro pruebas de audio, comprobación de tipos, integración local con D1/R2 y revisión en navegador de creación, invitación, conversión y envío. Esto no sustituye la nueva prueba física.
+Verificación de desarrollo: once regresiones Monkey C en simulador (cola, recuperación, igualdad de textos y presencia de acciones en el menú), cuatro pruebas de audio, comprobación de tipos, integración local con D1/R2 y revisión en navegador de creación, invitación, conversión y envío. Esto no sustituye la nueva prueba física. La navegación visual del menú y una interrupción real de la red todavía requieren validación en el Forerunner.
 
 ## Publicación y recuperación
 

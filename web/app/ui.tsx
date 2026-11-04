@@ -22,7 +22,7 @@ const post = (body?: unknown) => ({ method: 'POST', headers: { 'Content-Type': '
 const km = (meters: number) => (meters / 1000).toLocaleString('es-ES', { maximumFractionDigits: 3 });
 function Chrome({ children }: {
     children: React.ReactNode;
-}) { return <><header><a className="brand" href="/">a tu lado.</a><nav><a href="/">Mis carreras</a><a href="/downloads/atulado-fr970-v4.zip">Descargar Garmin</a><a href="/concepto.html">Ver el concepto</a></nav></header><main className="shell">{children}</main><footer>Las voces de los tuyos, kilómetro a kilómetro. Primera versión para pruebas de entrenamiento.<br />Los audios se guardan hasta que el corredor los borra. Solo compártelos mediante una invitación de confianza.</footer></>; }
+}) { return <><header><a className="brand" href="/">a tu lado.</a><nav><a href="/">Mis carreras</a><a href="/downloads/atulado-fr970-v5.zip">Descargar Garmin</a><a href="/concepto.html">Ver el concepto</a></nav></header><main className="shell">{children}</main><footer>Las voces de los tuyos, kilómetro a kilómetro. Primera versión para pruebas de entrenamiento.<br />Los audios se guardan hasta que el corredor los borra. Solo compártelos mediante una invitación de confianza.</footer></>; }
 export default function Dashboard({ signedIn }: {
     signedIn: boolean;
 }) {

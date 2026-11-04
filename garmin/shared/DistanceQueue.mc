@@ -60,7 +60,7 @@ class DistanceQueue {
             active = -1;
             return true;
         }
-        if (saved["version"] != 1 || ids.size() != 2 || ids[0] != "probe200" || ids[1] != "probe400") { return false; }
+        if (saved["version"] != 1 || ids.size() != 2 || !"probe200".equals(ids[0]) || !"probe400".equals(ids[1])) { return false; }
         var done = saved.hasKey("completed") ? saved["completed"] : null;
         var attempts = saved.hasKey("retries") ? saved["retries"] : null;
         if (!(done instanceof Array) || !(attempts instanceof Array) || done.size() != 2 || attempts.size() != 2) { return false; }
