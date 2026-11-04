@@ -1,62 +1,48 @@
-# A tu lado · Prueba Garmin
+# A tu lado · Prueba Garmin v2
 
-Experimento para Forerunner 970: reproducir dos mensajes de voz al superar **200 y 400 metros**, manteniendo la actividad nativa de Carrera. Aún no es una app lista para competir.
+Prueba de viabilidad para Forerunner 970: mensajes de ánimo a 200 y 400 metros durante Carrera. No usar aún en competición.
 
-## Qué hay
+## Cambio tras el error de medios en el reloj
 
-- `garmin/provider`: proveedor de audio con dos voces sintéticas de prueba incluidas en WAV. Usa la API Audio.Output (6.0.3), sin teléfono, servidor ni descargas durante la carrera.
-- `garmin/field`: campo independiente que muestra los metros de la actividad. **No comparte estado con el proveedor ni puede mantenerlo activo**. Por ello no muestra un contador de mensajes escuchados.
-- `garmin/shared`: cola por distancia y pruebas Monkey C de umbrales, pausas, saltos de distancia, exclusión de reproducciones simultáneas, errores y finalización.
-- `scripts/build.ps1`: compilación específica para fr970. La clave privada nunca se sube al repositorio.
+La v1 iniciaba el reproductor nativo con un iterador vacío y reproducía los audios por Audio.Output. El usuario observó «Se ha producido un error de medios», posiblemente incluso antes de 200 m. El simulador no había detectado ese aviso. La lista vacía es un defecto comprobado del diseño; su relación con el aviso es una hipótesis pendiente de confirmar en el reloj.
 
-## Estado de verificación (4 de noviembre de 2026)
+La v2 utiliza solamente el reproductor nativo: descarga tres MP3 válidos en la caché de medios y proporciona contenido real al iterador. Una pista silenciosa de dos segundos se repite entre mensajes. La distancia se consulta al preparar la siguiente pista: puede haber retraso por precarga/transición y no se promete exactitud al metro. Mantener el reproductor activo puede consumir más batería; pendiente medirlo.
 
-Perfil oficial `fr970` instalado con SDK Manager (en este equipo fue necesario abrirlo como administrador). Ambos proyectos compilan para Forerunner 970 con el SDK oficial 9.3.0. La prueba `distanceQueueRegression` pasa en el simulador oficial: 1 prueba, 0 fallos, 0 errores.
+## Instalar y sincronizar
 
-El proveedor entra en el contexto de reproducción del simulador y continúa ejecutando lecturas cada segundo sin una pista sonando (observados al menos 20 ticks). Se corrigió un fallo de arranque devolviendo un iterador vacío en lugar de un delegado con iterador nulo. Sin actividad simulada, la distancia devuelve `null` y no dispara mensajes, como corresponde.
+1. Descomprimir `bin/atulado-fr970-prueba-v2.zip` y copiar los dos `.prg` a la carpeta existente `GARMIN/Apps` del reloj, sustituyendo los de la prueba anterior. Son las mismas aplicaciones e identificadores.
+2. Para registrar la prueba, crear `atulado-provider-fr970.txt` vacío en `GARMIN/Apps/Logs`. Los logs contienen distancia y eventos de reproducción, sin ubicación GPS.
+3. Con wifi configurado, abrir el proveedor **A tu lado - prueba**. Su pantalla debe indicar **A TU LADO / V2**.
+4. Pulsar START para descargar los tres archivos. También se puede mantener MENU para forzar una nueva sincronización. Esperar a que termine y volver al proveedor: debe indicar **3 audios preparados**. Los archivos públicos de prueba se descargan desde este mismo repositorio de GitHub; no se envían grabaciones ni datos del usuario.
+5. Conectar los auriculares al reloj. Antes de caminar, pulsar DOWN en la configuración para probar la primera voz. Después quedará el silencio de espera. Esta reproducción manual no cuenta como mensaje de una carrera.
+6. Salir del proveedor y abrirlo de nuevo para iniciar una sesión nueva. Pulsar START cuando ya haya 3 archivos preparados, iniciar una nueva actividad nativa de Carrera y recorrer más de 450 m. El primer y segundo mensaje deben aparecer una sola vez. Dejar que cada voz termine; evitar saltarla.
+7. Repetir sin móvil ni wifi después de descargar, cambiando de pantalla y pausando/reanudando la actividad. Añadir si se desea el campo **A tu lado - distancia** para ver los metros. Ese campo es independiente: no controla el proveedor ni muestra mensajes escuchados.
 
-Pendiente: validar el flujo de actividad y la reproducción en auriculares en el reloj físico. Una compilación correcta y una prueba de lógica no demuestran que Garmin mantenga activo el proveedor entre mensajes.
+Si falla la descarga, conservar el código mostrado. Si reaparece el error de medios, recuperar el log del reloj y anotar si también falla la prueba manual de voz. No hace falta repetir la caminata si la voz manual falla.
 
-## Compilar
+## Comportamiento y límites
 
-Instalar SDK 9.3.0 o posterior, Java 21 y el dispositivo Forerunner 970 desde SDK Manager. Generar una clave de desarrollo siguiendo la documentación oficial de Garmin y guardarla fuera del código, o en `.local/` (ignorado por Git).
+Los mensajes se marcan completados mediante `SONG_EVENT_COMPLETE` y el identificador real de la pista, no por pasar su kilómetro ni por un simple STOPPED. La precarga devuelve una selección estable y no marca mensajes completados. No hay integración con Playrun ni persistencia de progreso de la carrera entre reinicios. Interrumpir una voz puede dejarla pendiente sin reintento automático durante esa sesión; reiniciar la prueba desde una actividad nueva. No borrar ni modificar actividades reales para probar.
 
-Desde PowerShell, en la raíz:
+La validación de auriculares, ciclo de vida dentro de Carrera, sincronización y avisos nativos debe hacerse en el reloj. El mockup web es independiente y no se ha modificado.
+
+## Compilar y ejecutar pruebas
+
+Verificado en esta revisión: compilación para `fr970`, MP3 decodificables y `distanceQueueRegression` en el simulador (1 prueba, 0 fallos, 0 errores). Pendientes: sincronización real, reproducción nativa, precarga y audios por distancia en el reloj. No se presenta esta versión como una solución ya confirmada en hardware.
+
+SDK Garmin 9.3.0, Java 21 y perfil oficial `fr970` instalados. En este equipo SDK Manager necesitó iniciarse como administrador. Clave privada en `.local/` o fuera del repositorio, nunca en Git.
 
 ```powershell
 ./scripts/build.ps1 -SdkPath 'RUTA_AL_SDK' -SigningKey 'RUTA_A_CLAVE.der'
 ./scripts/build.ps1 -SdkPath 'RUTA_AL_SDK' -SigningKey 'RUTA_A_CLAVE.der' -Tests
-```
-
-Para ejecutar los tests, abrir el simulador con `connectiq.bat` y lanzar:
-
-```powershell
+& 'RUTA_AL_SDK/bin/connectiq.bat'
 & 'RUTA_AL_SDK/bin/monkeydo.bat' 'bin/tests/atulado-provider-fr970.prg' fr970 /t
 ```
 
-## Instalar y probar en el reloj
+`garmin/shared/DistanceQueueTests.mc` comprueba umbrales, pausa, salto de distancia, exclusión de simultáneos, errores y finalización. No sustituye las pruebas del reproductor nativo ni las de hardware. Los binarios de instalación están en `bin/`; los de tests en `bin/tests/`.
 
-1. Compilar para fr970 sin `-Tests`. Conectar el reloj por USB y copiar los dos `.prg` de `bin/` a la carpeta existente `GARMIN/Apps`. No copiar los binarios genéricos ni los de `bin/tests/`.
-2. Para obtener registros, crear `atulado-provider-fr970.txt` vacío en `GARMIN/Apps/Logs` antes de ejecutar. Recuperarlo al terminar; las líneas empiezan por `ATULADO` e incluyen segundos de ejecución, distancia y estados de audio. No se registran ubicaciones ni datos personales.
-3. Añadir el campo **A tu lado - distancia** a Carrera. Conectar auriculares al reloj, desconectar el móvil y seleccionar **A tu lado - prueba** como proveedor de música.
-4. Pulsar START en la pantalla de configuración. Se solicita el contexto nativo de reproducción. No hay una pista silenciosa: queremos comprobar si Garmin conserva vivo el proveedor entre mensajes. Si sale o no permanece activo, ese resultado es un fallo de esta estrategia, no de la distancia.
-5. Iniciar una actividad nueva de Carrera, caminar/correr más de 450 metros y cambiar entre el campo, ritmo y mapa. Deben oírse los dos mensajes una sola vez. El punto es la distancia del reloj, no un poste del recorrido.
-6. Repetir desde una nueva ejecución de la app, pausando antes de los 200 m y reanudando. Durante la pausa no debe comenzar un mensaje nuevo. Uno ya iniciado puede terminar.
-7. Guardar la actividad y revisar el archivo FIT en Garmin Connect y el log de la prueba.
+## Referencias
 
-Control adicional: mantener MENU en la configuración activa la lectura de distancia y audio en ese contexto. Sirve para separar los problemas de audio de los de ciclo de vida; no demuestra funcionamiento autónomo dentro de Carrera.
-
-## Criterio para continuar
-
-Se necesita evidencia en reloj de: ticks y distancia actualizada con Carrera visible; dos audios en auriculares; reproducción sin cobertura; continuidad entre mensajes; ausencia de duplicados; actividad guardada correctamente. La API podría enviar el audio al altavoz: hay que observar la salida real, no asumirla.
-
-El contador del proveedor solo se reduce después de observar PLAYING y luego STOPPED. Eso indica fin de reproducción, pero no garantiza que se haya oído completo; también podría ser una interrupción. En caso de error se conserva el pendiente y se bloquean más intentos hasta reiniciar. Es una prueba de viabilidad, pendiente de mejorar el reconocimiento de fin, persistencia ante reinicios, cancelaciones, salida de audio y watchdog de reproducciones atascadas.
-
-Si Garmin cierra el proveedor sin pista, habrá que probar otra arquitectura; este prototipo no intenta evadir las restricciones del sistema. No hay integración con Playrun ni sincronización entre aplicaciones. El sitio publicado es un mockup separado y no se ha modificado.
-
-## Referencias oficiales
-
-- [Audio.Output](https://developer.garmin.com/connect-iq/api-docs/Toybox/Audio/Output.html)
-- [Recursos de audio](https://developer.garmin.com/connect-iq/articles/core-topics/Resources.html)
-- [Tipos y permisos](https://developer.garmin.com/connect-iq/articles/core-topics/Manifest_and_Permissions.html)
-- [SDK y dispositivos](https://developer.garmin.com/connect-iq/sdk/)
+- [Ejemplo oficial de proveedor de audio](https://github.com/garmin/connectiq-apps/tree/master/audio-provider/monkeymusic)
+- [ContentIterator](https://developer.garmin.com/connect-iq/api-docs/Toybox/Media/ContentIterator.html)
+- [Sincronización](https://developer.garmin.com/connect-iq/api-docs/Toybox/Communications/SyncDelegate.html)
