@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+  <iq:application id="d4e9467a184a4ba188c942e6742d0bf1" type="audio-content-provider-app" name="@Strings.AppName" entry="AtuladoApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="6.0.3">
+    <iq:products><iq:product id="fr970"/></iq:products>
+    <iq:permissions><iq:uses-permission id="AudioOutput"/></iq:permissions>
+    <iq:languages><iq:language>spa</iq:language><iq:language>eng</iq:language></iq:languages>
+    <iq:barrels/>
+  </iq:application>
+</iq:manifest>

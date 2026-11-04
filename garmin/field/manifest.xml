@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+  <iq:application id="9a1f1b192b854b18996a4b179f415a36" type="datafield" name="@Strings.AppName" entry="AtuladoFieldApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="6.0.3">
+    <iq:products><iq:product id="fr970"/></iq:products>
+    <iq:permissions/>
+    <iq:languages><iq:language>spa</iq:language><iq:language>eng</iq:language></iq:languages>
+    <iq:barrels/>
+  </iq:application>
+</iq:manifest>

@@ -1,0 +1,6 @@
+<resources>
+  <string id="AppName">A tu lado - prueba</string>
+  <bitmap id="LauncherIcon" filename="icon.png"/>
+  <audio id="Message200" filename="message-200.wav"/>
+  <audio id="Message400" filename="message-400.wav"/>
+</resources>

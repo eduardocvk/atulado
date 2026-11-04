@@ -1,0 +1,8 @@
+bin/
+**/gen/
+**/mir/
+*.der
+*.pem
+.local/
+*.prg
+*.iq
