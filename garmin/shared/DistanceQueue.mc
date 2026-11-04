@@ -1,7 +1,8 @@
+import Toybox.Lang;
 // No descuenta un mensaje hasta recibir confirmación del reproductor.
 class DistanceQueue {
-    var thresholds = [200.0, 400.0];
-    var completed = [false, false];
+    var thresholds as Array<Float> = [200.0, 400.0];
+    var completed as Array<Boolean> = [false, false];
     var active = -1;
     function initialize() {}
     function due(distance, running) {

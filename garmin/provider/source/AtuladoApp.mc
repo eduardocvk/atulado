@@ -92,7 +92,19 @@ class AtuladoApp extends Application.AudioContentProviderApp {
 class ProbeContent extends Media.ContentDelegate {
     function initialize() { ContentDelegate.initialize(); }
     // Experimento sin pista silenciosa. Comprobar si Garmin conserva el contexto.
-    function getContentIterator() { return null; }
+    function getContentIterator() { return new ProbeIterator(); }
+}
+class ProbeIterator extends Media.ContentIterator {
+    function initialize() { ContentIterator.initialize(); }
+    function get() { return null; }
+    function next() { return null; }
+    function previous() { return null; }
+    function peekNext() { return null; }
+    function peekPrevious() { return null; }
+    function canSkip() { return false; }
+    function shuffling() { return false; }
+    function repeatMode() { return Media.REPEAT_MODE_OFF; }
+    function getPlaybackProfile() { return new Media.PlaybackProfile(); }
 }
 class ProbeView extends WatchUi.View {
     function initialize() { View.initialize(); }

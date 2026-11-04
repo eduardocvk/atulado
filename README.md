@@ -11,9 +11,11 @@ Experimento para Forerunner 970: reproducir dos mensajes de voz al superar **200
 
 ## Estado de verificación (4 de noviembre de 2026)
 
-Ambos proyectos pasan la compilación genérica del SDK oficial 9.3.0. No se han ejecutado en simulador ni reloj. Las pruebas de regresión están escritas y se compilan con `-t`, pero todavía no se han ejecutado.
+Perfil oficial `fr970` instalado con SDK Manager (en este equipo fue necesario abrirlo como administrador). Ambos proyectos compilan para Forerunner 970 con el SDK oficial 9.3.0. La prueba `distanceQueueRegression` pasa en el simulador oficial: 1 prueba, 0 fallos, 0 errores.
 
-**Bloqueo:** falta el perfil oficial `fr970`. Instalarlo en Garmin Connect IQ SDK Manager, iniciando sesión con la cuenta Garmin. No se han inventado perfiles ni usado uno de otro reloj. Los binarios genéricos locales no son entregables validados para instalar.
+El proveedor entra en el contexto de reproducción del simulador y continúa ejecutando lecturas cada segundo sin una pista sonando (observados al menos 20 ticks). Se corrigió un fallo de arranque devolviendo un iterador vacío en lugar de un delegado con iterador nulo. Sin actividad simulada, la distancia devuelve `null` y no dispara mensajes, como corresponde.
+
+Pendiente: validar el flujo de actividad y la reproducción en auriculares en el reloj físico. Una compilación correcta y una prueba de lógica no demuestran que Garmin mantenga activo el proveedor entre mensajes.
 
 ## Compilar
 
@@ -29,12 +31,12 @@ Desde PowerShell, en la raíz:
 Para ejecutar los tests, abrir el simulador con `connectiq.bat` y lanzar:
 
 ```powershell
-& 'RUTA_AL_SDK/bin/monkeydo.bat' 'bin/atulado-provider-fr970.prg' fr970 /t
+& 'RUTA_AL_SDK/bin/monkeydo.bat' 'bin/tests/atulado-provider-fr970.prg' fr970 /t
 ```
 
 ## Instalar y probar en el reloj
 
-1. Compilar para fr970. Conectar el reloj por USB y copiar los dos `.prg` de `bin/` a la carpeta existente `GARMIN/Apps`. No copiar los binarios genéricos.
+1. Compilar para fr970 sin `-Tests`. Conectar el reloj por USB y copiar los dos `.prg` de `bin/` a la carpeta existente `GARMIN/Apps`. No copiar los binarios genéricos ni los de `bin/tests/`.
 2. Para obtener registros, crear `atulado-provider-fr970.txt` vacío en `GARMIN/Apps/Logs` antes de ejecutar. Recuperarlo al terminar; las líneas empiezan por `ATULADO` e incluyen segundos de ejecución, distancia y estados de audio. No se registran ubicaciones ni datos personales.
 3. Añadir el campo **A tu lado - distancia** a Carrera. Conectar auriculares al reloj, desconectar el móvil y seleccionar **A tu lado - prueba** como proveedor de música.
 4. Pulsar START en la pantalla de configuración. Se solicita el contexto nativo de reproducción. No hay una pista silenciosa: queremos comprobar si Garmin conserva vivo el proveedor entre mensajes. Si sale o no permanece activo, ese resultado es un fallo de esta estrategia, no de la distancia.

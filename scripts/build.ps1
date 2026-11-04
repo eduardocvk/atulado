@@ -11,9 +11,10 @@ if (!(Test-Path -LiteralPath $SigningKey)) { throw 'No se encuentra la clave pri
 $SigningKey = (Resolve-Path -LiteralPath $SigningKey).Path
 Push-Location $projectRoot
 try {
-    New-Item -ItemType Directory -Path bin -Force | Out-Null
+    $outputDirectory = if ($Tests) { 'bin/tests' } else { 'bin' }
+    New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
     foreach ($component in @('provider', 'field')) {
-        $options = @('-f', "garmin/$component/monkey.jungle", '-d', 'fr970', '-y', $SigningKey, '-o', "bin/atulado-$component-fr970.prg", '-w')
+        $options = @('-f', "garmin/$component/monkey.jungle", '-d', 'fr970', '-y', $SigningKey, '-o', "$outputDirectory/atulado-$component-fr970.prg", '-w')
         if ($Tests -and $component -eq 'provider') { $options += '-t' }
         & $compiler @options
         if ($LASTEXITCODE -ne 0) { throw "Error al compilar $component. Comprueba el perfil fr970 en SDK Manager." }
