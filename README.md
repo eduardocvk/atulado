@@ -1,12 +1,12 @@
-# A tu lado · Sincronización recuperable y menús del reloj (v5)
+# A tu lado · Sincronización recuperable y menús del reloj (v6)
 
-Web de carreras e invitaciones con grabación de voz, almacenamiento privado y proveedor Connect IQ para Forerunner 970. La prueba anterior de reproducción a 200 y 400 m funcionó en el reloj del usuario. Esta versión añade carreras reales y debe validarse de nuevo en hardware, especialmente la descarga de WAV.
+Web de carreras e invitaciones con grabación de voz, almacenamiento privado y proveedor Connect IQ para Forerunner 970. La prueba anterior de reproducción a 200 y 400 m funcionó en el reloj del usuario. El usuario confirmó también que la prueba de la v5 funciona, pero notificó consumo elevado de batería durante el día. La v6 corrige la espera de audio ilimitada; su efecto sobre la autonomía requiere medición física.
 
 ## Uso
 
 1. Entrar en [A tu lado](https://a-tu-lado.eduardocvk.chatgpt.site) con ChatGPT y crear una carrera. Los familiares no necesitan cuenta.
 2. Crear una invitación y compartirla. El destinatario elige un kilómetro y graba o sube hasta 60 segundos de audio. Escucha la grabación y confirma el envío.
-3. Descargar el ZIP v5 desde la web o desde `bin/atulado-fr970-v5.zip`. Copiar sus dos `.prg` a la carpeta existente `GARMIN/Apps` del reloj, sustituyendo los de prueba. Se conservan los identificadores de las aplicaciones.
+3. Descargar el ZIP v6 desde el enlace de esta entrega o desde `bin/atulado-fr970-v6.zip`. Copiar sus dos `.prg` a la carpeta existente `GARMIN/Apps` del reloj, sustituyendo los de prueba. Se conservan los identificadores de las aplicaciones.
 4. Abrir **A tu lado - prueba** desde los proveedores de música del Garmin. La pantalla inicial es un menú nativo: UP/DOWN desplazan y START selecciona. Elegir **Vincular con la web** para obtener un código nuevo. No hace falta mantener pulsado MENU.
 5. En el detalle de carrera de la web, abrir **Vincular esta carrera al Garmin** e introducir las ocho cifras. El código caduca a los diez minutos.
 6. Volver al menú del reloj y elegir **Sincronizar carrera**, la primera opción, con conexión disponible. Solo cambia el paquete activo cuando terminan todas las descargas. Si falla o se cancela, conserva el anterior; repetir esta opción retoma los archivos completados, comprobando que sigan en caché y coincidan su carrera y huella de contenido. El archivo que se interrumpió se descarga entero.
@@ -37,11 +37,11 @@ El campo de datos muestra solo la distancia. No se comunica con el proveedor ni 
 
 El login del corredor usa la identidad de Sites/ChatGPT, no correo mágico propio. Los invitados participan sin iniciar sesión. La retención es hasta borrado por el corredor. Solo se reciben mensajes antes de una nueva sincronización; no hay envíos en directo durante la carrera.
 
-Pendientes de validación: micrófono en móviles reales, vinculación y WAV en el reloj, auriculares al desconectar/reconectar, avisos y navegación, carreras largas, memoria y batería. El altavoz y la convivencia con Playrun/Spotify quedan fuera de esta entrega. Detener el reproductor al terminar la actividad.
+Pendientes de validación: micrófono en móviles reales, vinculación y WAV en el reloj, auriculares al desconectar/reconectar, avisos y navegación, carreras largas, memoria y batería. El altavoz y la convivencia con Playrun/Spotify quedan fuera de esta entrega. La v6 detiene el audio al detectar una actividad guardada (estado OFF después de ON), al terminar todos los mensajes reproducibles, tras 5 minutos sin iniciar actividad o tras 15 minutos sin cronómetro en marcha. En una parada de avituallamiento superior a 15 minutos hay que elegir de nuevo Continuar carrera. La prueba de auriculares termina tras una sola voz. La detección se revisa al avanzar/precargar pistas y al recibir eventos del reproductor; un audio en curso puede retrasarla. Si el firmware no comunica el estado, actúa el límite de espera. Mientras corre, la pista silenciosa sigue utilizando el reproductor: no se promete consumo de modo reloj.
 
 ## Desarrollo y pruebas
 
-- `garmin/provider`: proveedor v5 con web, caché nativa y recuperación de progreso.
+- `garmin/provider`: proveedor v6 con web, caché nativa y recuperación de progreso.
 - `garmin/field`: campo de distancia independiente.
 - `garmin/shared`: cola y regresiones Monkey C.
 - `web`: Vinext/React sobre Cloudflare Workers, D1 y R2; ver su README.
@@ -57,7 +57,7 @@ SDK oficial Garmin 9.3.0 y perfil `fr970`. SDK Manager se instaló como administ
 
 Para obtener logs, crear `atulado-provider-fr970.txt` vacío en `GARMIN/Apps/Logs`. No se registran claves ni grabaciones. Las líneas `ATULADO` permiten localizar selección, finalización e interrupciones. Los binarios de test están separados en `bin/tests/`.
 
-Verificación de desarrollo: once regresiones Monkey C en simulador (cola, recuperación, igualdad de textos y presencia de acciones en el menú), cuatro pruebas de audio, comprobación de tipos, integración local con D1/R2 y revisión en navegador de creación, invitación, conversión y envío. Esto no sustituye la nueva prueba física. La navegación visual del menú y una interrupción real de la red todavía requieren validación en el Forerunner.
+Verificación de desarrollo: catorce regresiones Monkey C en simulador (cola, recuperación, igualdad de textos y presencia de acciones en el menú), cuatro pruebas de audio, comprobación de tipos, integración local con D1/R2 y revisión en navegador de creación, invitación, conversión y envío. Esto no sustituye la nueva prueba física. La navegación visual del menú y una interrupción real de la red todavía requieren validación en el Forerunner.
 
 ## Publicación y recuperación
 
@@ -66,3 +66,5 @@ GitHub conserva el código. Sites conserva además su propio repositorio de desp
 El despliegue anterior era el mockup estático, versión 1. Se conserva como versión de recuperación en Sites. Los cambios de esquema se añaden mediante nuevas migraciones; no modificar una migración ya aplicada. El proveedor v2 de prueba permanece recuperable desde el commit `94b7dd6` y su ZIP local anterior.
 
 Referencias: [proveedor oficial de Garmin](https://github.com/garmin/connectiq-apps/tree/master/audio-provider/monkeymusic), [Media](https://developer.garmin.com/connect-iq/api-docs/Toybox/Media.html).
+
+La v6 se entrega como ZIP local y en GitHub; el enlace de descarga de la web publicada sigue apuntando a la v5 hasta la próxima publicación web. Para esta corrección usar el ZIP v6 de la entrega.

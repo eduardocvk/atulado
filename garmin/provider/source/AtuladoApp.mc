@@ -35,7 +35,7 @@ class AtuladoApp extends Application.AudioContentProviderApp {
             }
         }
         queue.restore(Application.Storage.getValue("progress:" + raceId));
-        log("inicio v5;archivos=" + refs.size());
+        log("inicio v6;archivos=" + refs.size());
     }
     function applyPackage(pack) {
         if (!(pack instanceof Dictionary) || !pack.hasKey("files") || !pack.hasKey("refs") || !pack.hasKey("raceId")) { return false; }
@@ -216,16 +216,34 @@ class ProbeContent extends Media.ContentDelegate {
     function resetContentIterator() { return iterator; }
     function onSong(id, event, position) {
         var app = Application.getApp();
-        if (preview || app.queue.active < 0 || app.refs.size() < 2) { return; }
+        if (preview) {
+            if (event == Media.SONG_EVENT_COMPLETE) { iterator.endPlayback("Prueba de auriculares terminada"); }
+            return;
+        }
+        if (app.queue.active < 0 || app.refs.size() < 2) { iterator.checkStop(); return; }
         var expected = app.refs[app.queue.active + 1];
         if (!id.equals(expected)) { return; }
-        if (event == Media.SONG_EVENT_COMPLETE) { app.queue.finish(); app.saveProgress(); app.log("completado;pendientes=" + app.queue.pending()); }
+        if (event == Media.SONG_EVENT_COMPLETE) { app.queue.finish(); app.saveProgress(); app.log("completado;pendientes=" + app.queue.pending()); iterator.checkStop(); }
         else if (event == Media.SONG_EVENT_STOP || event == Media.SONG_EVENT_SKIP_NEXT || event == Media.SONG_EVENT_SKIP_PREVIOUS) { app.queue.fail(); app.saveProgress(); iterator.invalidate(); app.log("interrumpido;pendientes=" + app.queue.pending()); }
     }
 }
 class ProbeIterator extends Media.ContentIterator {
-    var current; var upcoming = -1; var preview = false;
-    function initialize(voice) { ContentIterator.initialize(); preview = voice; current = Application.getApp().content(voice ? 1 : 0); }
+    var current; var upcoming = -1; var preview = false; var guard; var ended = false;
+    function initialize(voice) { ContentIterator.initialize(); preview = voice; guard = new PlaybackGuard(System.getTimer()); current = Application.getApp().content(voice ? 1 : 0); }
+    function endPlayback(reason) {
+        if (ended) { return; }
+        ended = true; current = null; upcoming = -1;
+        var app = Application.getApp(); app.notice = reason; app.saveProgress(); app.log(reason);
+        Media.stopPlayback();
+    }
+    function checkStop() {
+        if (ended) { return true; }
+        if (preview) { return false; }
+        var app = Application.getApp();
+        var reason = guard.stopReason(System.getTimer(), Activity.getActivityInfo().timerState, app.queue.pending() - app.queue.blocked());
+        if (reason != null) { endPlayback(reason); }
+        return ended;
+    }
     function invalidate() { upcoming = -1; }
     function get() { return current; }
     function planned() {
@@ -233,12 +251,13 @@ class ProbeIterator extends Media.ContentIterator {
         return upcoming;
     }
     function next() {
+        if (preview || checkStop()) { current = null; return null; }
         var app = Application.getApp(); var selected = planned();
         if (selected > 0) { app.queue.begin(selected - 1); app.log("seleccion=" + selected + ";m=" + Activity.getActivityInfo().elapsedDistance); }
         current = app.content(selected); upcoming = -1; return current;
     }
     function previous() { return current; }
-    function peekNext() { return Application.getApp().content(planned()); }
+    function peekNext() { if (preview || checkStop()) { return null; } return Application.getApp().content(planned()); }
     function peekPrevious() { return current; }
     function canSkip() { return false; }
     function shuffling() { return false; }
@@ -249,7 +268,7 @@ class ProbeIterator extends Media.ContentIterator {
 class RaceMenu extends WatchUi.Menu2 {
     var syncItem; var playItem; var pairItem; var progressItem;
     function initialize() {
-        Menu2.initialize({:title => "A tu lado / V5"});
+        Menu2.initialize({:title => "A tu lado / V6"});
         syncItem = new WatchUi.MenuItem("Sincronizar carrera", null, :sync, {});
         playItem = new WatchUi.MenuItem("Continuar carrera", null, :play, {});
         pairItem = new WatchUi.MenuItem("Vincular con la web", null, :pair, {});
@@ -274,7 +293,7 @@ class RaceStatusView extends WatchUi.View {
     function onUpdate(dc) {
         var app = Application.getApp(); var cx = dc.getWidth() / 2;
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK); dc.clear();
-        dc.drawText(cx, 50, Graphics.FONT_SMALL, "A TU LADO / V5", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, 50, Graphics.FONT_SMALL, "A TU LADO / V6", Graphics.TEXT_JUSTIFY_CENTER);
         dc.drawText(cx, 95, Graphics.FONT_XTINY, app.raceName.substring(0, app.raceName.length() > 28 ? 28 : app.raceName.length()), Graphics.TEXT_JUSTIFY_CENTER);
         dc.drawText(cx, 135, Graphics.FONT_MEDIUM, app.pairingCode.length() > 0 ? app.pairingCode : (app.refs.size() > 1 ? "Pendientes: " + app.queue.pending() : "Sin audios"), Graphics.TEXT_JUSTIFY_CENTER);
         dc.drawText(cx, 185, Graphics.FONT_XTINY, app.pairingCode.length() > 0 ? "Codigo para la web (10 min)" : "Interrumpidos: " + app.queue.blocked(), Graphics.TEXT_JUSTIFY_CENTER);
